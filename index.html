@@ -721,11 +721,10 @@ function renderMetaFunnel(allOpps, allLeads) {
   document.getElementById('metaTiming').innerHTML     = renderTimingTable(t);
   document.getElementById('metaLostReasons').innerHTML = renderLostReasons(f.lost_reasons, f.lost);
 
-  // Speed-to-Lead: ALLE Meta-Leads (leadRows ungefiltert) — sonst fehlen ältere Leads mit Calls
-  const allMetaLeads = leadRows.filter(l => l['custom.Quelle'] === 'Meta Ads');
-  const metaLeadIds  = new Set(allMetaLeads.map(l => l.id).filter(Boolean));
-  const metaCalls    = callActivities.filter(c => metaLeadIds.has(c.lead_id));
-  document.getElementById('metaSpeedToLead').innerHTML = renderSpeedToLead(calcSpeedToLead(allMetaLeads, metaCalls));
+  // Speed-to-Lead: date-gefilterte leads, Calls ungefiltert für Matching
+  const metaLeadIds = new Set(leads.map(l => l.id).filter(Boolean));
+  const metaCalls   = callActivities.filter(c => metaLeadIds.has(c.lead_id));
+  document.getElementById('metaSpeedToLead').innerHTML = renderSpeedToLead(calcSpeedToLead(leads, metaCalls));
 }
 
 // ============================================================
@@ -751,11 +750,10 @@ function renderLinkedInFunnel(allOpps, allLeads) {
   document.getElementById('liLostReasons').innerHTML   = renderLostReasons(f.lost_reasons, f.lost);
 
   // Speed-to-Lead: LinkedIn Leads
-  // Speed-to-Lead: ALLE LinkedIn-Leads (leadRows ungefiltert)
-  const allLiLeads = leadRows.filter(l => l['custom.Quelle'] === 'LinkedIn');
-  const liLeadIds  = new Set(allLiLeads.map(l => l.id).filter(Boolean));
-  const liCalls    = callActivities.filter(c => liLeadIds.has(c.lead_id));
-  document.getElementById('liSpeedToLead').innerHTML   = renderSpeedToLead(calcSpeedToLead(allLiLeads, liCalls));
+  // Speed-to-Lead: date-gefilterte leads, Calls ungefiltert für Matching
+  const liLeadIds = new Set(leads.map(l => l.id).filter(Boolean));
+  const liCalls   = callActivities.filter(c => liLeadIds.has(c.lead_id));
+  document.getElementById('liSpeedToLead').innerHTML   = renderSpeedToLead(calcSpeedToLead(leads, liCalls));
 }
 
 // ============================================================
