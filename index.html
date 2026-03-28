@@ -335,6 +335,10 @@ const callActivities = [{"lead_id": "lead_ftX391MpzBG3AydSHboRBozEoQbdzLasgZnBgW
 let currentFilterDays = 0;
 let revenueChartInst = null;
 let convTrendChartInst = null;
+// Daten für Charts (werden erst beim Tab-Wechsel gerendert)
+let _gesamtSalesOpps = [];
+let _gesamtMetaOpps  = [];
+let _gesamtLiOpps    = [];
 
 // ============================================================
 //  DATE FILTER
@@ -821,9 +825,19 @@ function renderGesamt(allOpps, allLeads) {
         </div>`).join('')}
     </div>`;
 
-  // Monthly revenue chart
-  renderRevenueChart(salesOpps);
-  renderConvTrendChart(metaOpps, liOpps);
+  // Charts nur rendern wenn Tab sichtbar, sonst nur Daten speichern
+  _gesamtSalesOpps = salesOpps;
+  _gesamtMetaOpps  = metaOpps;
+  _gesamtLiOpps    = liOpps;
+  if (document.getElementById('tab-gesamt').classList.contains('active')) {
+    renderGesamtCharts();
+  }
+}
+
+function renderGesamtCharts() {
+  if (_gesamtSalesOpps.length === 0 && oppRows.length === 0) return;
+  try { renderRevenueChart(_gesamtSalesOpps); } catch(e) { console.warn('Revenue chart error:', e); }
+  try { renderConvTrendChart(_gesamtMetaOpps, _gesamtLiOpps); } catch(e) { console.warn('Conv chart error:', e); }
 }
 
 // ============================================================
@@ -1227,6 +1241,8 @@ function showTab(name, btn) {
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   (btn || event.target.closest('.tab')).classList.add('active');
+  // Charts erst rendern wenn Gesamt-Tab sichtbar ist
+  if (name === 'gesamt') renderGesamtCharts();
 }
 
 // ── Init ──
