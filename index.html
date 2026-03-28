@@ -201,7 +201,7 @@
     </div>
     <div>
       <div class="section">
-        <div class="section-title"><div class="dot" style="background:var(--orange)"></div>Ø Tage zwischen Stufen</div>
+        <div class="section-title"><div class="dot" style="background:var(--orange)"></div>Stufen-Alter aktiver Deals</div>
         <div class="timing-table" id="metaTiming"></div>
       </div>
       <div class="section">
@@ -228,7 +228,7 @@
     </div>
     <div>
       <div class="section">
-        <div class="section-title"><div class="dot" style="background:var(--orange)"></div>Ø Tage zwischen Stufen</div>
+        <div class="section-title"><div class="dot" style="background:var(--orange)"></div>Stufen-Alter aktiver Deals</div>
         <div class="timing-table" id="liTiming"></div>
       </div>
       <div class="section">
@@ -460,66 +460,37 @@ function calcFunnelMetrics(opps, leads) {
 }
 
 // ============================================================
-//  STAGE TIMING (from statusChanges history)
+//  STAGE TIMING – Tage in aktueller Stufe (via last_activity)
 // ============================================================
 function calcStageTiming(opps) {
-  // For each stage transition, collect days taken
-  const buckets = {
-    lead_qc: [], qc_ig: [], ig_sc: [], sc_cc: [], cc_won: []
-  };
+  const now = Date.now();
+  const stageBuckets = {};
+  const wonCycles    = [];
 
-  const stageOf = s => {
-    const r = stageRank(s);
-    if (r >= 20) return 'won';
-    if (r >= 16) return 'cc';
-    if (r >= 12) return 'sc';
-    if (r >= 8)  return 'ig';
-    if (r >= 4)  return 'qc';
-    return 'lead';
-  };
-
-  const pairs = [
-    ['lead','qc','lead_qc'],
-    ['qc','ig','qc_ig'],
-    ['ig','sc','ig_sc'],
-    ['sc','cc','sc_cc'],
-    ['cc','won','cc_won'],
-  ];
-
-  for (const opp of opps) {
-    const hist = (statusChanges[opp.id] || []);
-    if (!hist.length) continue;
-
-    // Collect first-entry timestamps per stage
-    const firstEntry = {};
-    // Lead = date_created of opp
-    firstEntry['lead'] = opp.date_created;
-    for (const c of hist) {
-      const stage = stageOf(c.to_status);
-      if (!firstEntry[stage]) firstEntry[stage] = c.date;
-    }
-    // Current status
-    const curStage = stageOf(opp.status_label);
-    if (!firstEntry[curStage]) firstEntry[curStage] = opp.date_created;
-
-    for (const [from, to, key] of pairs) {
-      if (firstEntry[from] && firstEntry[to]) {
-        const d = (new Date(firstEntry[to]) - new Date(firstEntry[from])) / 86400000;
-        if (d >= 0 && d < 365) buckets[key].push(d);
+  for (const o of opps) {
+    if (o.status_type === 'won') {
+      if (o.date_won && o.date_created) {
+        const d = (new Date(o.date_won) - new Date(o.date_created)) / 86400000;
+        if (d >= 0 && d < 730) wonCycles.push(d);
       }
+      continue;
     }
+    if (o.status_type === 'lost') continue;
+
+    const label = o.status_label || 'Unbekannt';
+    const ref   = o.last_activity || o.date_created;
+    if (!ref) continue;
+    const days  = (now - new Date(ref)) / 86400000;
+    if (!stageBuckets[label]) stageBuckets[label] = [];
+    stageBuckets[label].push(days);
   }
 
-  const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
-  const t = {
-    lead_qc: avg(buckets.lead_qc),
-    qc_ig:   avg(buckets.qc_ig),
-    ig_sc:   avg(buckets.ig_sc),
-    sc_cc:   avg(buckets.sc_cc),
-    cc_won:  avg(buckets.cc_won),
-  };
-  t.total = [t.lead_qc, t.qc_ig, t.ig_sc, t.sc_cc, t.cc_won].filter(x => x !== null).reduce((a,b)=>a+b, 0) || null;
-  return t;
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const stages = Object.entries(stageBuckets)
+    .map(([label, days]) => ({ label, avg: avg(days), count: days.length }))
+    .sort((a, b) => stageRank(a.label) - stageRank(b.label));
+
+  return { stages, avgSalesCycle: avg(wonCycles), wonCount: wonCycles.length };
 }
 
 // ============================================================
@@ -635,19 +606,26 @@ function renderFunnelFlow(f, topLabel, topCount, color) {
 }
 
 function renderTimingTable(t) {
-  const rows = [
-    { label: 'Lead → QC Termin',   val: t.lead_qc },
-    { label: 'QC → IG Termin',     val: t.qc_ig   },
-    { label: 'IG → SC Termin',     val: t.ig_sc   },
-    { label: 'SC → CC Termin',     val: t.sc_cc   },
-    { label: 'CC → Won / Lost',    val: t.cc_won  },
-    { label: 'Gesamt Sales Cycle', val: t.total   },
-  ];
+  if (!t.stages || !t.stages.length) {
+    return '<div style="color:var(--muted);font-size:12px;padding:12px">Keine aktiven Deals im Zeitraum.</div>';
+  }
+  const stageRows = t.stages.map(s => {
+    const color = s.avg > 21 ? 'var(--red)' : s.avg > 10 ? 'var(--orange)' : 'var(--green)';
+    return `<tr>
+      <td>${s.label}</td>
+      <td class="right" style="color:${color}">${s.avg !== null ? s.avg + ' d' : '—'}</td>
+      <td class="right" style="color:var(--muted);font-size:11px">${s.count} Deals</td>
+    </tr>`;
+  }).join('');
+  const cycleRow = t.avgSalesCycle !== null ? `
+    <tr style="border-top:1px solid var(--border);font-weight:600">
+      <td>Ø Sales Cycle (Won)</td>
+      <td class="right" style="color:var(--blue)">${t.avgSalesCycle} d</td>
+      <td class="right" style="color:var(--muted);font-size:11px">${t.wonCount} Won</td>
+    </tr>` : '';
   return `<table>
-    <thead><tr><th>Stufe</th><th>Ø Dauer</th></tr></thead>
-    <tbody>
-      ${rows.map(r => `<tr><td>${r.label}</td><td class="right">${r.val !== null ? r.val + ' Tage' : '—'}</td></tr>`).join('')}
-    </tbody>
+    <thead><tr><th>Stufe</th><th>Ø seit letztem Update</th><th></th></tr></thead>
+    <tbody>${stageRows}${cycleRow}</tbody>
   </table>`;
 }
 
@@ -739,11 +717,11 @@ function renderMetaFunnel(allOpps, allLeads) {
   document.getElementById('metaTiming').innerHTML     = renderTimingTable(t);
   document.getElementById('metaLostReasons').innerHTML = renderLostReasons(f.lost_reasons, f.lost);
 
-  // Speed-to-Lead: leads direkt (nicht über opps) für vollständiges Matching
-  const metaLeadIds = new Set(leads.map(l => l.id).filter(Boolean));
-  const metaCalls = callActivities.filter(c => metaLeadIds.has(c.lead_id));
-  // leads here are leadRows entries which have 'id' and 'date_created'
-  document.getElementById('metaSpeedToLead').innerHTML = renderSpeedToLead(calcSpeedToLead(leads, metaCalls));
+  // Speed-to-Lead: ALLE Meta-Leads (leadRows ungefiltert) — sonst fehlen ältere Leads mit Calls
+  const allMetaLeads = leadRows.filter(l => l['custom.Quelle'] === 'Meta Ads');
+  const metaLeadIds  = new Set(allMetaLeads.map(l => l.id).filter(Boolean));
+  const metaCalls    = callActivities.filter(c => metaLeadIds.has(c.lead_id));
+  document.getElementById('metaSpeedToLead').innerHTML = renderSpeedToLead(calcSpeedToLead(allMetaLeads, metaCalls));
 }
 
 // ============================================================
@@ -769,9 +747,11 @@ function renderLinkedInFunnel(allOpps, allLeads) {
   document.getElementById('liLostReasons').innerHTML   = renderLostReasons(f.lost_reasons, f.lost);
 
   // Speed-to-Lead: LinkedIn Leads
-  const liLeadIds = new Set(leads.map(l => l.id).filter(Boolean));
-  const liCalls   = callActivities.filter(c => liLeadIds.has(c.lead_id));
-  document.getElementById('liSpeedToLead').innerHTML   = renderSpeedToLead(calcSpeedToLead(leads, liCalls));
+  // Speed-to-Lead: ALLE LinkedIn-Leads (leadRows ungefiltert)
+  const allLiLeads = leadRows.filter(l => l['custom.Quelle'] === 'LinkedIn');
+  const liLeadIds  = new Set(allLiLeads.map(l => l.id).filter(Boolean));
+  const liCalls    = callActivities.filter(c => liLeadIds.has(c.lead_id));
+  document.getElementById('liSpeedToLead').innerHTML   = renderSpeedToLead(calcSpeedToLead(allLiLeads, liCalls));
 }
 
 // ============================================================
@@ -814,7 +794,7 @@ function renderGesamt(allOpps, allLeads) {
     ['Close Rate (CC)',  mf.cr_won + '%',      lf.cr_won + '%'     ],
     ['Won',              mf.won,               lf.won              ],
     ['Won Umsatz',       fmtEur(mf.won_value), fmtEur(lf.won_value)],
-    ['Ø Sales Cycle',    mt.total ? mt.total + 'd' : '—', lt.total ? lt.total + 'd' : '—'],
+    ['Ø Sales Cycle (Won)', mt.avgSalesCycle ? mt.avgSalesCycle + 'd' : '—', lt.avgSalesCycle ? lt.avgSalesCycle + 'd' : '—'],
   ];
 
   document.getElementById('gesamtVergleich').innerHTML = `
