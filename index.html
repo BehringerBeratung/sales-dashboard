@@ -513,7 +513,7 @@ function calcSpeedToLead(leads, calls) {
     callCount[c.lead_id] = (callCount[c.lead_id] || 0) + 1;
   }
 
-  const buckets = { u5: 0, u30: 0, u60: 0, over60: 0 };
+  const buckets = { u15: 0, u60: 0, u480: 0, u1440: 0, u4320: 0, over4320: 0 };
   const minuteDiffs = [];
   let reached = 0;
 
@@ -525,10 +525,12 @@ function calcSpeedToLead(leads, calls) {
       const mins = (new Date(fc) - new Date(lead.date_created)) / 60000;
       if (mins < 0) continue;
       minuteDiffs.push(mins);
-      if (mins < 5) buckets.u5++;
-      else if (mins < 30) buckets.u30++;
-      else if (mins < 60) buckets.u60++;
-      else buckets.over60++;
+      if      (mins <   15) buckets.u15++;
+      else if (mins <   60) buckets.u60++;
+      else if (mins <  480) buckets.u480++;
+      else if (mins < 1440) buckets.u1440++;
+      else if (mins < 4320) buckets.u4320++;
+      else                  buckets.over4320++;
     }
   }
 
@@ -648,10 +650,12 @@ function renderLostReasons(lostReasons, totalLost) {
 function renderSpeedToLead(stl) {
   const total = stl.total || 1;
   const buckets = [
-    { label: '< 5 Min',   count: stl.buckets.u5,    color: 'var(--green)'  },
-    { label: '5–30 Min',  count: stl.buckets.u30,   color: 'var(--blue)'   },
-    { label: '30–60 Min', count: stl.buckets.u60,   color: 'var(--orange)' },
-    { label: '> 1 Std',   count: stl.buckets.over60, color: 'var(--red)'   },
+    { label: '< 15 Min',      count: stl.buckets.u15,     color: 'var(--green)'  },
+    { label: '< 1 Stunde',    count: stl.buckets.u60,     color: 'var(--cyan)'   },
+    { label: '< 8 Stunden',   count: stl.buckets.u480,    color: 'var(--blue)'   },
+    { label: '< 24 Stunden',  count: stl.buckets.u1440,   color: 'var(--orange)' },
+    { label: '< 72 Stunden',  count: stl.buckets.u4320,   color: 'var(--orange)' },
+    { label: '> 72 Stunden',  count: stl.buckets.over4320, color: 'var(--red)'   },
   ];
   const avgStr = stl.avgMins !== null
     ? (stl.avgMins < 60 ? `${stl.avgMins} Min` : `${Math.round(stl.avgMins/60)} Std ${stl.avgMins%60} Min`)
